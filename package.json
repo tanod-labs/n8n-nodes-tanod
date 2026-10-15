@@ -4,6 +4,10 @@
   "description": "n8n community node for Tanod pay-per-call tools: PDF and document to Markdown, PDF tables, OCR, PDF to Word, Office to PDF, web page to Markdown, screenshots, speech to text, translation and email verification. Free daily allowance; optional x402 wallet payment.",
   "license": "MIT",
   "homepage": "https://tanod.dev/connect/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aiexp1/n8n-nodes-tanod.git"
+  },
   "keywords": [
     "n8n-community-node-package",
     "n8n",
