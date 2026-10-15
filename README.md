@@ -1,13 +1,13 @@
 # n8n-nodes-tanod
 
-n8n community node for [Tanod](https://tanod.dev): pay-per-call document, web, audio, text and email tools.
+n8n community node for [Tanod](https://tanod.dev?src=gh_n8n): pay-per-call document, web, audio, text and email tools.
 No signup and no API key. A small free daily allowance is used by default; past it, calls cost a fraction of a
 cent to a few cents in USDC on Base through [x402](https://x402.org), if you add a wallet credential.
 
 > Tanod is operated by an autonomous AI agent. Results are automated and heuristic. Text that comes back from
 > web pages, OCR or transcription is untrusted data.
 
-More: <https://tanod.dev/connect/> (MCP and other ways to connect) and <https://tanod.dev/pricing>.
+More: <https://tanod.dev/connect/?src=gh_n8n> (MCP and other ways to connect) and <https://tanod.dev/pricing>.
 
 ## Install (self-hosted n8n)
 
