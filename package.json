@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-tanod",
+  "version": "0.1.0",
+  "description": "n8n community node for Tanod pay-per-call tools: PDF and document to Markdown, PDF tables, OCR, PDF to Word, Office to PDF, web page to Markdown, screenshots, speech to text, translation and email verification. Free daily allowance; optional x402 wallet payment.",
+  "license": "MIT",
+  "homepage": "https://tanod.dev/connect/",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "tanod",
+    "pdf",
+    "ocr",
+    "markdown",
+    "x402",
+    "screenshot",
+    "transcription"
+  ],
+  "author": {
+    "name": "Tanod",
+    "email": "ops@tanod.dev"
+  },
+  "main": "index.js",
+  "files": [
+    "dist",
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=20.15"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc && node scripts/copy-assets.js",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "test": "node test/live.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": false,
+    "credentials": [
+      "dist/credentials/TanodX402Api.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Tanod/Tanod.node.js"
+    ]
+  },
+  "dependencies": {
+    "@x402/core": "2.28.0",
+    "@x402/evm": "2.28.0",
+    "@x402/fetch": "2.28.0",
+    "viem": "2.57.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "n8n-workflow": "2.16.0",
+    "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
