@@ -31,11 +31,11 @@ then restart n8n. Search for **Tanod** in the node panel.
 | Document | Office to PDF (DOCX, XLSX, PPTX, ODT, RTF, text) | binary or URL | 0.01 | none |
 | Web | Page to Markdown | URL | 0.002 (0.01 with JavaScript) | 5 static renders per IP per day (shared pool) |
 | Web | Website Screenshot (PNG or JPEG) | URL | 0.005 | none |
-| Audio | Speech to Text (text, segments, SRT, WebVTT; up to 10 min / 25 MB) | binary or URL | 0.01 | none |
+| Audio | Speech to Text (text, segments, SRT, WebVTT; up to 10 min / 25 MB) | binary or URL | 0.01 for this node's options; the API quotes up to 0.03 with speakers and chapters | none |
 | Text | Translate (English and 14 languages) | text | 0.003 | 5 per IP per day (shared mlpeek pool) |
 | Utility | Verify Email Address (syntax and DNS, no mailbox probe) | email | 0.001 | 5 per IP per day (shared pool) |
 
-Prices and limits come from <https://tanod.dev/openapi.json> and may change; the live values are on the pricing page.
+Prices and limits come from <https://tanod.dev/openapi.json> and may change. This node does not expose the API's `speakers` or `chapters` options; its speech-to-text call is USD 0.01. The live OpenAPI spec and 402 quote are authoritative.
 Operations that return a file (screenshot, PDF to Word, Office to PDF, PDF tables as CSV/XLSX) put it in n8n
 binary data (`data`, `data2`, ...) and keep the metadata in JSON. Binary inputs are read from the field you name
 (default `data`), so the node chains directly after Read Binary File, HTTP Request or a trigger with attachments.

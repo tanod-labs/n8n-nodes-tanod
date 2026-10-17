@@ -15,7 +15,7 @@ const { OPS } = require('../dist/nodes/Tanod/operations.js');
 	// ---- package shape
 	assert.ok(pkg.keywords.includes('n8n-community-node-package'));
 	assert.equal(pkg.license, 'MIT');
-	assert.equal(pkg.repository, undefined);
+	assert.equal(pkg.repository.url, 'git+https://github.com/tanod-labs/n8n-nodes-tanod.git');
 	for (const f of [...pkg.n8n.nodes, ...pkg.n8n.credentials]) require(path.join('..', f));
 
 	// ---- node + credential description
