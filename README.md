@@ -54,8 +54,15 @@ binary data (`data`, `data2`, ...) and keep the metadata in JSON. Binary inputs 
 Paste an EVM private key (`0x...`) of a **dedicated wallet** that holds a few dollars of USDC on Base. No ETH is
 needed for the payment itself. Use a throwaway wallet, never your main one. The key is stored by n8n as a
 credential, is used only to sign payments to the price Tanod quotes, and is never logged or written to output.
-The node option **Max Price per Call** (default USD 0.05) refuses any quote above it. Each paid call is a
-separate on-chain-settled USDC transfer; if a call fails, you are not charged.
+The node option **Max Price per Call** (default USD 0.05) caps the actual SDK-selected payment in atomic
+USDC (6 decimals), not a display price or the cheapest item in an offer array. A changed quote is checked
+again inside the pinned SDK policy and immediately before payment creation; only exact USDC on Base and
+an initially vetted payee/transfer method are allowed. Missing/malformed terms fail closed, and fractional
+micro-dollar limits are rounded down. Redirects are refused on both free and paid requests, so payment
+headers cannot be forwarded to a different URL or lost in a redirect loop.
+
+Each paid call is a separate transfer authorization. A failed or lost response after submission is not proof
+that no payment settled. Do not blindly pay again for an unresolved operation.
 
 Card credits are not supported yet.
 
@@ -64,7 +71,9 @@ Card credits are not supported yet.
 ```bash
 npm install
 npm run build   # tsc -> dist/
-npm test        # loads the built node, 1 live free-tier call, plus a mock wallet payment
+npm run lint   # typecheck
+npm test        # offline SDK cap regressions, built-node shape and local mock payment
+# TANOD_LIVE_TEST=1 npm test  # optional live free-tier check; not part of offline verification
 ```
 
 ## Licence

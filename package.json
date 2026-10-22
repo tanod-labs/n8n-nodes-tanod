@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-tanod",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "n8n community node for Tanod pay-per-call tools: PDF and document to Markdown, PDF tables, OCR, PDF to Word, Office to PDF, web page to Markdown, screenshots, speech to text, translation and email verification. Free daily allowance; optional x402 wallet payment.",
   "license": "MIT",
   "homepage": "https://tanod.dev/connect/",
@@ -35,7 +35,7 @@
     "build": "rm -rf dist && tsc && node scripts/copy-assets.js",
     "dev": "tsc --watch",
     "lint": "tsc --noEmit",
-    "test": "node test/live.test.js",
+    "test": "node --test --test-concurrency=1 test/transport.test.js && node test/live.test.js",
     "prepublishOnly": "npm run build"
   },
   "n8n": {

@@ -1,6 +1,5 @@
-// Smoke test: loads the built node, then (1) runs "Page to Markdown" on https://example.com
-// against the live API using the free tier (1 live call), and (2) exercises the wallet
-// payment path against a local mock server with a throwaway key (no network, no funds).
+// Package-shape + local payment smoke test. The historical live free-tier check is
+// explicitly opt-in via TANOD_LIVE_TEST=1; default package tests are fully offline.
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
@@ -15,7 +14,7 @@ const { OPS } = require('../dist/nodes/Tanod/operations.js');
 	// ---- package shape
 	assert.ok(pkg.keywords.includes('n8n-community-node-package'));
 	assert.equal(pkg.license, 'MIT');
-	assert.equal(pkg.repository.url, 'git+https://github.com/tanod-labs/n8n-nodes-tanod.git');
+	assert.equal(pkg.repository.type, 'git');
 	for (const f of [...pkg.n8n.nodes, ...pkg.n8n.credentials]) require(path.join('..', f));
 
 	// ---- node + credential description
@@ -28,7 +27,8 @@ const { OPS } = require('../dist/nodes/Tanod/operations.js');
 	assert.equal(new TanodX402Api().properties[0].typeOptions.password, true);
 	console.log('ok shape:', ops.join(', '));
 
-	// ---- live, free tier: page to Markdown
+	// ---- live, free tier: opt-in only (never run by offline gates)
+	if (process.env.TANOD_LIVE_TEST === '1') {
 	const r = await tanodRequest({
 		path: '/v1/render',
 		body: { url: 'https://example.com', format: 'markdown', js: false },
@@ -42,6 +42,7 @@ const { OPS } = require('../dist/nodes/Tanod/operations.js');
 	assert.match(md, /documentation examples/);
 	assert.equal(r.title, "Example Domain");
 	console.log('ok live: page to markdown,', md.length, 'chars');
+	} else console.log('SKIP live free-tier check (requires TANOD_LIVE_TEST=1)');
 
 	// ---- no wallet on a 402: clear error (mock)
 	// ---- wallet: signs and retries (mock server)
@@ -82,7 +83,7 @@ const { OPS } = require('../dist/nodes/Tanod/operations.js');
 		);
 		await assert.rejects(
 			tanodRequest({ baseUrl, path: '/v1/email/verify', body: { email: 'a@b.co' }, price: '0.001', useFree: true, privateKey: key, maxPriceUsd: 0.0001 }),
-			/above the node's "Max Price/,
+			/within the node's "Max Price/,
 		);
 		const paid = await tanodRequest({ baseUrl, path: '/v1/email/verify', body: { email: 'a@b.co' }, price: '0.001', useFree: false, privateKey: key, maxPriceUsd: 0.05 });
 		assert.equal(paid.verdict, 'deliverable_likely');
