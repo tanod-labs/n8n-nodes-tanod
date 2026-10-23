@@ -2,13 +2,14 @@ import type {
 	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
+	NodeConnectionType,
 	INodeProperties,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import { OPS, type OpDef } from './operations';
-import { tanodRequest, TanodPaymentError } from './transport';
+import { tanodCreditRequest } from './creditsTransport';
 
 const RESOURCES = [
 	{ name: 'Document', value: 'document' },
@@ -44,17 +45,34 @@ export class Tanod implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Tanod',
 		name: 'tanod',
-		icon: 'file:tanod.svg',
+		icon: { light: 'file:tanod.svg', dark: 'file:tanod.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
-			'Pay-per-call document, web, audio, text and email tools. Free daily allowance; optional x402 wallet for more.',
+			'Document, web, audio, text and email tools with prepaid credits, free allowances or an x402 wallet.',
 		defaults: { name: 'Tanod' },
-		inputs: ['main'],
-		outputs: ['main'],
-		credentials: [{ name: 'tanodX402Api', required: false }],
+		// Type-only casts keep older n8n runtimes from needing NodeConnectionTypes.
+		inputs: ['main' as NodeConnectionType],
+		outputs: ['main' as NodeConnectionType],
+		usableAsTool: true,
+		credentials: [
+			{ name: 'tanodCreditsApi', required: true, displayOptions: { show: { paymentMode: ['credits'] } } },
+			{ name: 'tanodX402Api', required: false, displayOptions: { show: { paymentMode: ['legacy'] } } },
+		],
 		properties: [
+			{
+				displayName: 'Payment Mode',
+				name: 'paymentMode',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{ name: 'Prepaid Credit Key', value: 'credits' },
+					{ name: 'Free Allowance / X402 Wallet', value: 'legacy' },
+				],
+				default: 'legacy',
+				description: "Credit mode pays from the selected key without free-tier or wallet fallback. Existing workflows keep free/wallet mode. Each input item is one paid call; the key balance is the only limit; don't enable Retry On Fail on paid calls.",
+			},
 			{
 				displayName: 'Resource',
 				name: 'resource',
@@ -113,7 +131,7 @@ export class Tanod implements INodeType {
 				default: '',
 				placeholder: '1-5,9',
 				displayOptions: show('document', 'pdfTables', 'pdfToWord'),
-				description: 'Pages to process (N, N-M, N-, -M, last; comma separated). Empty means all.',
+				description: 'Pages to process (N, N-M, N-, -M, last; comma-separated). Empty means all.',
 			},
 			{
 				displayName: 'Output Format',
@@ -211,7 +229,7 @@ export class Tanod implements INodeType {
 				default: 'es',
 				required: true,
 				displayOptions: show('text', 'translate'),
-				description: 'en, es, fr, de, pt, it, nl, ru, zh, ja, ko, ar, hi, id or tl',
+				description: 'Target language code, for example es or fr',
 			},
 			{
 				displayName: 'Source Language',
@@ -236,6 +254,7 @@ export class Tanod implements INodeType {
 				displayName: 'Options',
 				name: 'options',
 				type: 'collection',
+				displayOptions: { show: { paymentMode: ['legacy'] } },
 				placeholder: 'Add Option',
 				default: {},
 				options: [
@@ -265,29 +284,35 @@ export class Tanod implements INodeType {
 		const items = this.getInputData();
 		const out: INodeExecutionData[] = [];
 
-		let privateKey: string | undefined;
-		try {
-			const cred = await this.getCredentials('tanodX402Api');
-			privateKey = (cred?.privateKey as string) || undefined;
-		} catch {
-			privateKey = undefined; // credential is optional
-		}
-
 		for (let i = 0; i < items.length; i++) {
 			try {
 				const operation = this.getNodeParameter('operation', i) as string;
-				const def = OPS.find((o) => o.value === operation) as OpDef;
-				const opts = this.getNodeParameter('options', i, {}) as IDataObject;
+				const def = OPS.find((o) => o.value === operation);
+				if (!def) throw new NodeOperationError(this.getNode(), 'Unsupported Tanod operation.', { itemIndex: i });
+				const paymentMode = this.getNodeParameter('paymentMode', i, 'legacy') as string;
+				if (!['credits', 'legacy'].includes(paymentMode)) throw new NodeOperationError(this.getNode(), 'Unsupported Tanod payment mode.', { itemIndex: i });
 				const body = await buildBody(this, i, def);
-				const reply = await tanodRequest({
-					path: def.path,
-					body,
-					price: def.price,
-					useFree: def.free && opts.useFree !== false,
-					privateKey,
-					maxPriceUsd: (opts.maxPriceUsd as number | undefined) ?? 0.05,
-					dynamicPrice: operation === 'pageToMarkdown' && body.js === true,
-				});
+				let reply: unknown;
+				if (paymentMode === 'credits') {
+					reply = await tanodCreditRequest(this, def.path, body);
+				} else {
+					// Do not load the wallet SDK or read a wallet credential in credit mode.
+					const { tanodRequest } = await import('./transport.js');
+					let privateKey: string | undefined;
+					try {
+						privateKey = (await this.getCredentials('tanodX402Api')).privateKey as string || undefined;
+					} catch { /* wallet credential remains optional for free calls */ }
+					const opts = this.getNodeParameter('options', i, {}) as IDataObject;
+					reply = await tanodRequest({
+						path: def.path,
+						body,
+						price: def.price,
+						useFree: def.free && opts.useFree !== false,
+						privateKey,
+						maxPriceUsd: (opts.maxPriceUsd as number | undefined) ?? 0.05,
+						dynamicPrice: operation === 'pageToMarkdown' && body.js === true,
+					});
+				}
 
 				const json = reply as IDataObject;
 				const binary: INodeExecutionData['binary'] = {};
@@ -318,10 +343,7 @@ export class Tanod implements INodeType {
 					out.push({ json: { error: message }, pairedItem: { item: i } });
 					continue;
 				}
-				if (error instanceof TanodPaymentError || error instanceof Error) {
-					throw new NodeOperationError(this.getNode(), message, { itemIndex: i });
-				}
-				throw error;
+				throw new NodeOperationError(this.getNode(), message, { itemIndex: i });
 			}
 		}
 		return [out];

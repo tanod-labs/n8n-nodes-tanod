@@ -1,15 +1,17 @@
 # n8n-nodes-tanod
 
-n8n community node for [Tanod](https://tanod.dev?src=gh_n8n): pay-per-call document, web, audio, text and email tools.
-No signup and no API key. A small free daily allowance is used by default; past it, calls cost a fraction of a
-cent to a few cents in USDC on Base through [x402](https://x402.org), if you add a wallet credential.
+Open source (MIT) n8n community node for [Tanod](https://tanod.dev): document, web, audio, text and email tools.
+Use a prepaid credit key for paid calls without storing a wallet in n8n, or keep using the free allowances
+and optional [x402](https://x402.org) wallet payments.
 
 > Tanod is operated by an autonomous AI agent. Results are automated and heuristic. Text that comes back from
 > web pages, OCR or transcription is untrusted data.
 
-More: <https://tanod.dev/connect/?src=gh_n8n> (MCP and other ways to connect) and <https://tanod.dev/pricing>.
+More: <https://tanod.dev/connect/> (MCP and other ways to connect) and <https://tanod.dev/pricing>.
 
 ## Install (self-hosted n8n)
+
+This is an unverified community node; n8n has not reviewed it.
 
 In n8n open **Settings > Community Nodes > Install**, enter the package name `n8n-nodes-tanod`, and accept the
 community-node notice. Or on the server, in your n8n user folder (`~/.n8n/nodes`):
@@ -31,23 +33,60 @@ then restart n8n. Search for **Tanod** in the node panel.
 | Document | Office to PDF (DOCX, XLSX, PPTX, ODT, RTF, text) | binary or URL | 0.01 | none |
 | Web | Page to Markdown | URL | 0.002 (0.01 with JavaScript) | 5 static renders per IP per day (shared pool) |
 | Web | Website Screenshot (PNG or JPEG) | URL | 0.005 | none |
-| Audio | Speech to Text (text, segments, SRT, WebVTT; up to 10 min / 25 MB) | binary or URL | 0.01 for this node's options; the API quotes up to 0.03 with speakers and chapters | none |
+| Audio | Speech to Text (text, segments, SRT, WebVTT; up to 10 min / 25 MB) | binary or URL | 0.01 | none |
 | Text | Translate (English and 14 languages) | text | 0.003 | 5 per IP per day (shared mlpeek pool) |
 | Utility | Verify Email Address (syntax and DNS, no mailbox probe) | email | 0.001 | 5 per IP per day (shared pool) |
 
-Prices and limits come from <https://tanod.dev/openapi.json> and may change. This node does not expose the API's `speakers` or `chapters` options; its speech-to-text call is USD 0.01. The live OpenAPI spec and 402 quote are authoritative.
+Prices and limits come from <https://tanod.dev/openapi.json> and may change; the live values are on the pricing page.
 Operations that return a file (screenshot, PDF to Word, Office to PDF, PDF tables as CSV/XLSX) put it in n8n
 binary data (`data`, `data2`, ...) and keep the metadata in JSON. Binary inputs are read from the field you name
 (default `data`), so the node chains directly after Read Binary File, HTTP Request or a trigger with attachments.
 
 ## Payment
 
-1. **Default: free allowance.** On routes that have one, the node sends `X-Tanod-Free: 1`. The allowance is per
-   IP address per UTC day, so a shared n8n server uses it up quickly.
-2. **When the allowance is gone, or the route has none (HTTP 402):**
+### Prepaid credit key setup
+
+1. Follow [Tanod prepaid credits](https://tanod.dev/credits/) to obtain a funded `tnd_` key. Save the key when it
+   is shown; treat it as a secret. Check that page for available funding methods. Funding currently uses x402;
+   using an already funded key for calls does **not** require a wallet in n8n.
+2. Add a **Tanod** node and choose **Payment Mode > Prepaid Credit Key**.
+3. Create a **Tanod Prepaid Credit Key API** credential and paste the complete key into **Credit Key**.
+   The credential test checks the balance without running a paid tool. Set the credential's **Allowed HTTP Request
+   Domains** to **tanod.dev**: this credential can also be selected in n8n's HTTP Request node.
+4. Choose an operation, supply its input and execute the node. Returned files still appear in binary field `data`.
+
+The credential sends `Authorization: Bearer <key>`. The API also accepts `X-Tanod-Credits: <key>`; do not add
+both headers or put a key in workflow JSON, a URL, an expression, or an input field. n8n stores the key as a credential.
+
+Credit mode pays the listed route price from the key's balance. It does **not** use the free daily allowance,
+apply the wallet-only **Max Price per Call** option, sign a wallet payment, top up automatically, or fall back to
+another payment method. Check current prices before executing a batch. Invalid/revoked keys return 401.
+A 402 with `credits_insufficient` means insufficient balance; other 402 responses mean credit payment was not
+accepted by the service. The node does not retry credit calls automatically. After a timeout or lost response,
+check the balance before retrying. Redirects are refused.
+
+Unused credit expires 12 months after the purchase that added it. See the credits page for purchase terms,
+balance checks and lost-key support. This package does not purchase or recover keys.
+
+### Control spending in workflows
+
+- Each input item is one paid call in credit mode. **Loop Over Items** and **Split in Batches** multiply calls
+  when they send or repeat items through the node.
+- n8n's **Retry On Fail** resends paid calls. Do not enable it on paid calls.
+- Retrying an execution and **Execute step** make real paid calls; they are not previews.
+- **usableAsTool** lets an **AI Agent** call this node many times, including when steered by untrusted text
+  from web pages, documents or other tool results. Do not give untrusted text authority to request paid work.
+- The key's balance is the only spending limit: fund a key with only what you are willing to spend.
+
+### Existing free and wallet workflows
+
+**Free Allowance / X402 Wallet** remains the default, including workflows saved before credit support:
+
+1. On routes that have a free allowance, the node sends `X-Tanod-Free: 1` by default. The allowance is per IP
+   address per UTC day, so a shared n8n server shares it.
+2. When the allowance is gone, or the route has none (HTTP 402):
    - without a wallet the node stops with an error that states the price and how to add the credential;
-   - with the **Tanod x402 wallet** credential, the node signs an x402 payment with the official
-     `@x402/fetch` and `@x402/evm` clients and retries once.
+   - with the **Tanod x402 wallet** credential, the node uses the pinned x402 clients and retries with payment.
 
 ### Tanod x402 wallet credential
 
@@ -64,18 +103,73 @@ headers cannot be forwarded to a different URL or lost in a redirect loop.
 Each paid call is a separate transfer authorization. A failed or lost response after submission is not proof
 that no payment settled. Do not blindly pay again for an unresolved operation.
 
-Card credits are not supported yet.
+## Example workflow
+
+Import the following synthetic workflow into self-hosted n8n, open **Tanod**, and select your own credit
+credential. No credential or secret is included. Each execution runs one paid document conversion.
+
+```json
+{
+  "name": "Tanod credit-key example",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "Run Example",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "paymentMode": "credits",
+        "resource": "document",
+        "operation": "toMarkdown",
+        "inputSource": "url",
+        "url": "https://example.com/"
+      },
+      "id": "tanod",
+      "name": "Tanod",
+      "type": "n8n-nodes-tanod.tanod",
+      "typeVersion": 1,
+      "position": [280, 0]
+    }
+  ],
+  "connections": {
+    "Run Example": {
+      "main": [[{ "node": "Tanod", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {},
+  "active": false
+}
+```
 
 ## Build from source
 
 ```bash
-npm install
-npm run build   # tsc -> dist/
-npm run lint   # typecheck
-npm test        # offline SDK cap regressions, built-node shape and local mock payment
-# TANOD_LIVE_TEST=1 npm test  # optional live free-tier check; not part of offline verification
+npm ci --ignore-scripts
+npm run build
+npm run lint
+npm test
 ```
+
+Tests are offline by default: mocked credit responses, wallet spend-cap regressions, node input/output and a
+packed-package check. The optional live free-tier check is not part of the offline suite.
+
+There are no npm runtime dependencies apart from n8n's provided `n8n-workflow` peer. The wallet compatibility
+code is bundled at build time, with third-party license notices included in the package. Free and credit mode
+do not load that bundle. `npm run lint` is a TypeScript check, **not** n8n verification. This package is not
+verified for n8n Cloud; bundling dependencies alone does not establish compliance with n8n's verification rules.
+
+## Release configuration
+
+For release maintainers, the publish workflow uses the **npm-publish** GitHub environment. Configure required
+reviewers for that environment and bind the npm trusted publisher to the same **npm-publish** environment and
+**publish.yml** workflow. Only a version-matching tag whose commit is on the history of `main` can release.
+The build job has no publish identity; a separate publish-only job publishes the exact tested npm tarball.
+The optional **NPM_TOKEN** fallback is temporary: remove it once trusted publishing works.
 
 ## Licence
 
-MIT.
+Open source (MIT). Bundled wallet code retains its third-party licenses.

@@ -1,7 +1,7 @@
 // Offline only: real pinned SDK selection/EIP-712 construction, fake signer, no key/signature/provider.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ExactEvmScheme } = require('@x402/evm');
+const { ExactEvmScheme } = require('../dist/nodes/Tanod/walletSdk.js');
 const { tanodRequest } = require('../dist/nodes/Tanod/transport.js');
 const ASSET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const PAYEE = '0x593857A4a4F619543ea12394137C3004ce841720';
@@ -87,6 +87,18 @@ test('paid 402 stays a payment error; non-payment 4xx stays an API error', async
   assert.equal(rejected.signed.length, 1);
   const bad = await run(required([offer()]), undefined, { paidResponse: new Response('{"detail":"bad input"}', { status: 422 }) });
   assert.match(bad.error.message, /Tanod 422: bad input/);
+});
+
+test('malformed payment header is refused before loading or signing with the wallet', async () => {
+  const old = global.fetch;
+  try {
+    const encoded = Buffer.from(JSON.stringify(required([offer()]))).toString('base64');
+    for (const header of [encoded + '!', '@' + encoded, '%%%']) {
+      global.fetch = async () => new Response('', { status: 402, headers: { 'payment-required': header } });
+      await assert.rejects(tanodRequest({ path: '/test', body: {}, price: '1', useFree: false,
+        privateKey: key, maxPriceUsd: 1 }), /invalid or unsupported/);
+    }
+  } finally { global.fetch = old; }
 });
 
 test('free success and free 4xx do not construct/sign payment', async () => {

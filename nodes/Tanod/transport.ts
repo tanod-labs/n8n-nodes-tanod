@@ -1,6 +1,3 @@
-import { x402Client, x402HTTPClient, wrapFetchWithPayment } from '@x402/fetch';
-import { ExactEvmScheme } from '@x402/evm';
-
 const NETWORK = 'eip155:8453';
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const UINT256_MAX = (1n << 256n) - 1n;
@@ -105,7 +102,15 @@ export async function tanodRequest(a: TanodRequestArgs): Promise<unknown> {
 	const body = await readJson(res);
 	let required: any;
 	try {
-		required = new x402HTTPClient(new x402Client()).getPaymentRequiredResponse((name) => res.headers.get(name), body);
+		// Same header-first/v1-body selection as the pinned SDK, without loading wallet code.
+		const header = res.headers.get('PAYMENT-REQUIRED');
+		if (header) {
+			if (!/^[A-Za-z0-9+/]*={0,2}$/.test(header)) throw new Error('Invalid payment header.');
+			required = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
+		}
+		else if (body && typeof body === 'object' && body.x402Version === 1) required = body;
+		else throw new Error('Missing payment requirements.');
+		if (!required || typeof required !== 'object') throw new Error('Invalid payment requirements.');
 	} catch {
 		throw new TanodPaymentError('Payment required: invalid or unsupported x402 payment requirements. Nothing was signed.');
 	}
@@ -128,7 +133,8 @@ export async function tanodRequest(a: TanodRequestArgs): Promise<unknown> {
 	let fetchWithPay: typeof fetch;
 	try {
 		const key = (a.privateKey.startsWith('0x') ? a.privateKey : `0x${a.privateKey}`) as `0x${string}`;
-		const { privateKeyToAccount } = await import('viem/accounts');
+		const { loadPrivateKeyToAccount, x402Client, ExactEvmScheme, wrapFetchWithPayment } = await import('./walletSdk.js');
+		const privateKeyToAccount = await loadPrivateKeyToAccount();
 		const account = privateKeyToAccount(key);
 		const client = new x402Client().register(NETWORK, new ExactEvmScheme(account));
 		// SDK 2.28.0 supports atomic per-asset caps. Avoid its floating Money parsing path.
