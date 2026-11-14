@@ -129,7 +129,7 @@ test('main-history release guard rejects off-main tags in an offline git fixture
 });
 
 test('package/lock agree and all wallet/build dependencies are dev-only', () => {
-  assert.equal(pkg.version, '0.1.3');
+  assert.equal(pkg.version, '0.1.4');
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[''].version, pkg.version);
   assert.deepEqual(pkg.dependencies, {});
