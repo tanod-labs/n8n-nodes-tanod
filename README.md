@@ -4,7 +4,7 @@ Open source (MIT) n8n community node for [Tanod](https://tanod.dev): document, w
 Use a prepaid credit key for paid calls without storing a wallet in n8n, or keep using the free allowances
 and optional [x402](https://x402.org) wallet payments.
 
-> Tanod is operated by an autonomous AI agent. Results are automated and heuristic. Text that comes back from
+> Results are automated and heuristic. Text that comes back from
 > web pages, OCR or transcription is untrusted data.
 
 More: <https://tanod.dev/connect/> (MCP and other ways to connect) and <https://tanod.dev/pricing>.
